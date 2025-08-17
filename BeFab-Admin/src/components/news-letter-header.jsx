@@ -3,8 +3,10 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { ChevronDown, Download, Plus, Search } from "lucide-react";
 import { Input } from "./ui/input";
 import { RiColorFilterFill, RiFilter2Fill } from "react-icons/ri";
+import { useNavigate } from "react-router-dom";
 
 export function NewsletterHeader() {
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col space-y-4">
         <div className="flex flex-wrap gap-2 justify-between">
@@ -12,7 +14,7 @@ export function NewsletterHeader() {
         <h1 className="text-2xl font-semibold">Newsletter Management</h1>
         <p className="text-sm text-gray-600">Create, edit, and manage your newsletters</p>
       </div>
-<Button className="bg-[#862633] hover:bg-[#6f1a23] text-white lg:ml-auto">
+<Button onClick={()=>navigate('/new-news')} className="bg-[#862633] hover:bg-[#6f1a23] text-white lg:ml-auto">
         <Plus className="w-4 h-4" />
         Create Newsletter
       </Button>

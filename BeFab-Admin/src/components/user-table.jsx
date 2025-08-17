@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
 
-export function UserTable({ data }) {
+export function UserTable({ data, d }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5); // Number of items per page
 
@@ -95,7 +95,6 @@ export function UserTable({ data }) {
               <TableHead className="w-[48px]"></TableHead>
               <TableHead className="text-gray-500">USER</TableHead>
               <TableHead className="text-gray-500">USERNAME</TableHead>
-              <TableHead className="text-gray-500">STATUS</TableHead>
               <TableHead className="text-gray-500">ROLE</TableHead>
               <TableHead className="text-gray-500">ACCOUNT CREATED</TableHead>
               <TableHead className="text-gray-500">2FA</TableHead>
@@ -113,9 +112,6 @@ export function UserTable({ data }) {
                   <div className="text-sm text-gray-500">{user.email}</div>
                 </TableCell>
                 <TableCell>{user.userName}</TableCell>
-                <TableCell>
-                  <Badge variant="active">Active</Badge>
-                </TableCell>
                 <TableCell>{user.role.join(', ')}</TableCell>
                 <TableCell><RelativeTime dateString={user.createdAt} /></TableCell>
                 <TableCell>

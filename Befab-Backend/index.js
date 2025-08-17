@@ -55,7 +55,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Static frontend
 app.engine("html", require("ejs").renderFile);
 app.set("view engine", "html");
-app.use("/", express.static(path.join(__dirname, "build")));
+app.use("/", express.static(path.join(__dirname, "files")));
 app.set("views", path.join(__dirname, "/build"));
 
 // Routes

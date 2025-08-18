@@ -1,6 +1,7 @@
 import CompetitionAnalytics from "@/components/competition-analytics";
 import AiSuggestions from "@/components/competitions-ai-generated";
 import CompetitionsTable from "@/components/competitions-competitions";
+import { API_URL, getCookie } from "@/components/cookieUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,9 +12,45 @@ import {
   SelectValue,
 } from "@/components/ui/select"; // Changed from "@radix-ui/react-select" to local shadcn select
 import { Download, Plus, Search } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const Competitions = () => {
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+    const [data, setData] = useState([]);
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch(`${API_URL}/admin/competition`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token: getCookie("skillrextech_auth"),
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          toast.error(data.error);
+        } else {
+          setUsers(data);
+          setData(data);
+          console.log(data);
+        }
+      } catch (error) {
+        console.error("Error during login:", error);
+        toast.error("An error occurred. Please try again.");
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
   return (
     <div className="flex flex-col gap-4 py-4 px-4 lg:px-6 md:gap-6 md:py-6">
       <div className="flex flex-col space-y-4">
@@ -26,7 +63,7 @@ const Competitions = () => {
           </div>
           <div className="flex gap-3">
             {/* Your SVG code remains the same */}
-            <Button className="bg-[#0284C7] text-white ml-auto py-5.25">
+            <Button onClick={()=>navigate('/new-competition')} className="bg-[#0284C7] text-white ml-auto py-5.25">
               <Plus className="w-4 h-4" />
               Create Competition
             </Button>
@@ -51,9 +88,9 @@ const Competitions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Upcoming">Upcoming</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
               </SelectContent>
             </Select>
 
@@ -63,19 +100,8 @@ const Competitions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="user1">User 1</SelectItem>
-                <SelectItem value="user2">User 2</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select>
-              <SelectTrigger className="w-[150px] text-sm">
-                <SelectValue placeholder="All Time" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="user1">User 1</SelectItem>
-                <SelectItem value="user2">User 2</SelectItem>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="AI">AI</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -87,9 +113,8 @@ const Competitions = () => {
                 <SelectValue placeholder="Start Date" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Start Date</SelectItem>
-                <SelectItem value="user1">User 1</SelectItem>
-                <SelectItem value="user2">User 2</SelectItem>
+                <SelectItem value="start">Start Date</SelectItem>
+                <SelectItem value="end">End Date</SelectItem>
               </SelectContent>
             </Select>
             <svg
@@ -107,9 +132,9 @@ const Competitions = () => {
           </div>
         </div>
       </div>
-      <CompetitionsTable />
-      <AiSuggestions/>
-      <CompetitionAnalytics/>
+      <CompetitionsTable data={data} />
+      {/* <AiSuggestions/> */}
+      <CompetitionAnalytics data={users}/>
     </div>
   );
 };

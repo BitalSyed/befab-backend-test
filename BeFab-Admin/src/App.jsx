@@ -22,6 +22,7 @@ import { API_URL, getCookie } from "./components/cookieUtils";
 import { toast, ToastContainer } from "react-toastify";
 import NewUser from "./pages/NewUser";
 import NewNewsLetter from "./pages/NewNewsLetter";
+import NewCompetition from "./pages/NewCompetition";
 
 function App() {
   const navigate = useNavigate();
@@ -97,6 +98,7 @@ function App() {
                 <Route path="/new-user" element={<NewUser />} />
                 <Route path="/news-letters" element={<NewsLetters />} />
                 <Route path="/new-news" element={<NewNewsLetter />} />
+                <Route path="/new-competition" element={<NewCompetition />} />
                 <Route path="/competitions" element={<Competitions />} />
                 <Route path="/calender" element={<Calender />} />
                 <Route path="/videos" element={<Videos />} />

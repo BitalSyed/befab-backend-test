@@ -14,6 +14,7 @@ const mongoose = require("mongoose");
 const user = require("../models/user.js");
 const Log = require("../models/logs.js");
 const Newsletter = require("../models/news.js");
+const Competition = require("../models/competition.js");
 // const samlStrategy = require("./samlStrategy.js");
 
 const Email = process.env.EMAIL;
@@ -288,6 +289,78 @@ app.post("/push-user", async (req, res) => {
 });
 
 // *****News Letter*****
+app.post("/news", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: "Session Expired" });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "SkillRex-Tech");
+    const email = decoded.email;
+
+    // Find current user
+    const currentUser = await user.findOne({ email });
+    if (!currentUser) {
+      return res.status(401).json({ error: "User Not Found" });
+    }
+
+    // Get all newsletters with author populated
+    const newsletters = await Newsletter.find()
+      .populate("author", "-password -__v")
+      .sort({ date: -1 });
+
+    // Total newsletters
+    const totalNewsletters = await Newsletter.countDocuments();
+
+    // Last month calculation
+    const lastMonth = new Date();
+    lastMonth.setDate(lastMonth.getDate() - 30);
+
+    const lastMonthCount = await Newsletter.countDocuments({
+      date: { $gte: lastMonth },
+    });
+
+    const lastMonthRate =
+      totalNewsletters > 0
+        ? ((lastMonthCount / totalNewsletters) * 100).toFixed(2)
+        : 0;
+
+    // Today's newsletters
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const todayCount = await Newsletter.countDocuments({
+      date: { $gte: startOfDay },
+    });
+
+    // Average per day in last month
+    const avgPerDay = (lastMonthCount / 30).toFixed(2);
+
+    return res.json({
+      currentUser,
+      newsletters,
+      stats: {
+        totalNewsletters,
+        lastMonth: {
+          created: lastMonthCount,
+          rate: `${lastMonthRate}%`,
+        },
+        today: {
+          created: todayCount,
+        },
+        average: {
+          perDay: avgPerDay,
+        },
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server Error" });
+  }
+});
 app.post("/push-news", upload.single("picture"), async (req, res) => {
   try {
     const { token, title, description } = req.body;
@@ -340,5 +413,167 @@ app.post("/push-news", upload.single("picture"), async (req, res) => {
     return res.status(500).json({ error: "Server Error" });
   }
 });
+
+// *****Competition*****
+app.post("/competition", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: "Session Expired" });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "SkillRex-Tech");
+    const email = decoded.email;
+
+    // Find current user
+    const currentUser = await user.findOne({ email });
+    if (!currentUser) {
+      return res.status(401).json({ error: "User Not Found" });
+    }
+
+    // Get all competitions with author & participants populated
+    const competitions = await Competition.find()
+      .populate("author", "-password -__v")
+      .populate("participants", "-password -__v")
+      .sort({ start: -1 });
+
+    // Total competitions
+    const totalCompetitions = await Competition.countDocuments();
+
+    // Completed competitions count
+    const completedCount = await Competition.countDocuments({ status: "Completed" });
+    const completionRate =
+      totalCompetitions > 0
+        ? ((completedCount / totalCompetitions) * 100).toFixed(2)
+        : 0;
+
+    // Last month calculation
+    const lastMonth = new Date();
+    lastMonth.setDate(lastMonth.getDate() - 30);
+
+    const lastMonthCount = await Competition.countDocuments({
+      start: { $gte: lastMonth },
+    });
+
+    const creationRate =
+      totalCompetitions > 0
+        ? ((lastMonthCount / totalCompetitions) * 100).toFixed(2)
+        : 0;
+
+    // Today's competitions
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const todayCount = await Competition.countDocuments({
+      start: { $gte: startOfDay },
+    });
+
+    // Average participants
+    let totalParticipants = 0;
+    competitions.forEach((c) => {
+      totalParticipants += c.participants.length;
+    });
+    const avgParticipants =
+      competitions.length > 0
+        ? (totalParticipants / competitions.length).toFixed(2)
+        : 0;
+
+    return res.json({
+      currentUser,
+      competitions,
+      stats: {
+        totalCompetitions,
+        completion: {
+          completed: completedCount,
+          rate: `${completionRate}%`,
+        },
+        lastMonth: {
+          created: lastMonthCount,
+          rate: `${creationRate}%`,
+        },
+        today: {
+          created: todayCount,
+        },
+        average: {
+          participants: avgParticipants,
+        },
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.post("/push-competition", upload.none(), async (req, res) => {
+  try {
+    const { token, title, description, start, end } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: "Session Expired" });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "SkillRex-Tech");
+    const email = decoded.email;
+
+    // Find current user
+    const currentUser = await user.findOne({ email });
+    if (!currentUser) {
+      return res.status(401).json({ error: "User Not Found" });
+    }
+
+    // Validate required fields
+    if (!title || !description || !start || !end) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Date validation
+    if (startDate < today) {
+      return res.status(400).json({ error: "Start date cannot be before today" });
+    }
+    if (endDate < startDate) {
+      return res.status(400).json({ error: "End date cannot be before start date" });
+    }
+
+    // Create new competition
+    const newCompetition = new Competition({
+      title,
+      description,
+      start: startDate,
+      end: endDate,
+      author: currentUser._id,
+      participants: [], // initially empty
+    });
+
+    await newCompetition.save();
+
+    // Log the action
+    const log = new Log({
+      user: currentUser._id,
+      email: currentUser.email,
+      eventType: "competition_created",
+      description: `Competition "${title}" created by ${currentUser.userName}`,
+    });
+    await log.save();
+
+    return res.json({
+      message: "Competition created successfully",
+      data: newCompetition,
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server Error" });
+  }
+});
+
 
 module.exports = app;

@@ -1,27 +1,38 @@
-const mongoose = require("mongoose");
-const UserSchema = new mongoose.Schema({
-  auth: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  meals: [{ name: { type: String }, calories: { type: Number }, protein: { type: Number }, fiber: { type: Number }, carbs: { type: Number } }],
-  calories: {
-    range: { type: Number },
-    total: { type: Number },
-    burned: { type: Number },
-    remaining: { type: Number },
+const mongoose = require('mongoose');
+
+const MealItemSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    calories: { type: Number, required: true }, // US metrics mandated in spec :contentReference[oaicite:13]{index=13}
+    protein_g: { type: Number, default: 0 },
+    fat_g: { type: Number, default: 0 },
+    carbs_g: { type: Number, default: 0 },
+    quantity: { type: Number, default: 1 },
+    unit: { type: String, default: 'g' } // search selectable (grams/cups) :contentReference[oaicite:14]{index=14}
   },
-  water: { range: {type: Number},
-    drink: { type: Number },
+  { _id: false }
+);
+
+const DayNutritionSchema = new mongoose.Schema(
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    date: { type: Date, required: true },
+    meals: {
+      breakfast: [MealItemSchema],
+      lunch: [MealItemSchema],
+      dinner: [MealItemSchema],
+      snacks: [MealItemSchema]
+    },
+    waterIntake_oz: { type: Number, default: 0 }, // hydration tracker; US metrics (oz) :contentReference[oaicite:15]{index=15}
+    hydrationReminder: {
+      enabled: { type: Boolean, default: false },
+      frequency: { type: String, enum: ['daily', 'weekly', 'monthly'], default: 'daily' } // :contentReference[oaicite:16]{index=16}
+    },
+    notes: String
   },
-  macronutrient: { fats: {type: Number},
-    carbs: { type: Number },
-    protein: { type: Number },
-    fiber: { type: Number },
-    sugar: { type: Number },
-    sodium: { type: Number },
-  },
-  foods: [{ type: mongoose.Schema.Types.ObjectId, ref: "food" }],
-  favourites: [{ type: mongoose.Schema.Types.ObjectId, ref: "food" }],
-  sleep: { type: Number },
-  createdAt: { type: Date, default: Date.now },
-});
-const Nutrition = mongoose.model("nutrition", UserSchema);
-module.exports = Nutrition;
+  { timestamps: true }
+);
+
+DayNutritionSchema.index({ user: 1, date: 1 }, { unique: true });
+
+module.exports = mongoose.model('DayNutrition', DayNutritionSchema);

@@ -1,41 +1,30 @@
-const mongoose = require("mongoose");
-const UserSchema = new mongoose.Schema({
-  firstName: { type: String },
-  lastName: { type: String },
-  userName: { type: String },
-  profession: { type: String },
-  bio: { type: String },
-  profilePhoto: { type: String }, // URL
-  email: { type: String, required: true, unique: true },
-  password: { type: String},
-  emailtfa: { type: String },
-  phone: { type: String },
-  tfa: { type: String },
+const mongoose = require('mongoose');
 
-  // Extra features
-  interests: [String], 
-  skills: [String],
-  pronouns: { type: String },
-  privacySettings: {
-    showEmail: { type: Boolean, default: false },
-    visibleFields: [String], // e.g. ['firstName', 'bio']
-  },
+const roles = ['admin', 'member'];
 
-  role: [{
-    type: String,
-    enum: ["admin", "member", "moderator"],
-    default: "member",
-  }],
-  badges: [String],
-  points: { type: Number, default: 0 },
-  otp: {
-    type: String,
+const UserSchema = new mongoose.Schema(
+  {
+    firstName: { type: String, trim: true, required: true },
+    lastName: { type: String, trim: true, required: true },
+    username: {
+      type: String,
+      trim: true,
+      unique: true,
+      required: true,
+      match: /^[a-zA-Z0-9_.-]+@Befab$/ // “username@Befab” format from spec
+    }, // :contentReference[oaicite:0]{index=0}
+    email: { type: String, trim: true, lowercase: true, unique: true, required: true },
+    passwordHash: { type: String, required: true },
+    role: { type: String, enum: roles, default: 'member' }, // only Admin, Member per spec :contentReference[oaicite:1]{index=1}
+    institution: { type: String, trim: true }, // SSO selected institution (optional) :contentReference[oaicite:2]{index=2}
+    avatarUrl: { type: String, trim: true },
+    isActive: { type: Boolean, default: true },
+    isLocked: { type: Boolean, default: false },
   },
-  otpExpiresAt: {
-    type: Date,
-    default: () => new Date(Date.now() + 5 * 60 * 1000),
-  },
-  createdAt: { type: Date, default: Date.now() },
-});
-const User = mongoose.model("User", UserSchema);
-module.exports = User;
+  { timestamps: true }
+);
+
+UserSchema.index({ username: 1 });
+UserSchema.index({ email: 1 });
+
+module.exports = mongoose.model('User', UserSchema);

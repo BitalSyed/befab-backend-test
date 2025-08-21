@@ -1,25 +1,42 @@
-const mongoose = require("mongoose");
-const UserSchema = new mongoose.Schema({
-  auth: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  sleep: { duration: {type: Number},
-    deep: { type: Number },
-    remSleep: { type: Number },
-    quality: { type: String, enum: ['poor', 'fair', 'good', 'excellent'] },
+const mongoose = require('mongoose');
+
+const FitnessSchema = new mongoose.Schema(
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    date: { type: Date, required: true },
+    summary: {
+      heartRate_bpm: Number,
+      steps: Number,
+      calories_kcal: Number,
+      sleep_hrs: Number
+    }, // Fitness Summary & Sleep Tracker (from Health app) :contentReference[oaicite:17]{index=17}
+    vitals: {
+      bloodPressure_systolic: Number,
+      bloodPressure_diastolic: Number,
+      bloodGlucose_mgdl: Number,
+      spo2_percent: Number,
+      respiratoryRate_bpm: Number,
+      bodyTemp_f: Number
+    }, // U.S. metrics note :contentReference[oaicite:18]{index=18}
+    bodyComposition: {
+      weight_lb: Number,
+      height_in: Number,
+      bmi: Number,
+      bodyFat_percent: Number
+    },
+    workouts: [
+      {
+        type: { type: String, trim: true },
+        duration_min: Number,
+        distance_mi: Number,
+        calories_kcal: Number,
+        notes: String
+      }
+    ] // manual additions supported :contentReference[oaicite:19]{index=19}
   },
-  heartRate: { type: Number },
-  steps: { type: Number },
-  distance: { type: Number },
-  bp: { type: Number },
-  oxygen: { type: Number },
-  respiratoryRate: { type: Number },
-  weight: { type: Number },
-  bmi: { type: Number },
-  bodyFat: { type: Number },
-  leanMass: { type: Number },
-  bloodGlucose: { type: Number },
-  temperature: { type: Number },
-  height: { type: Number },
-  createdAt: { type: Date, default: Date.now },
-});
-const Fitness = mongoose.model("fitness", UserSchema);
-module.exports = Fitness;
+  { timestamps: true }
+);
+
+FitnessSchema.index({ user: 1, date: 1 }, { unique: true });
+
+module.exports = mongoose.model('Fitness', FitnessSchema);

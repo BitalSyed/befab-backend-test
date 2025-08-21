@@ -1,60 +1,31 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const CompetitionSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
+const CompetitionSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, required: true },
+    imageUrl: { type: String },
+    status: { type: String, enum: ['draft', 'upcoming', 'active', 'completed', 'paused'], default: 'draft' }, // :contentReference[oaicite:9]{index=9}
+    start: { type: Date, required: true },
+    end: { type: Date, required: true },
+    author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Admin only :contentReference[oaicite:10]{index=10}
+    participants: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        progress: { type: Number, default: 0 }, // % progress
+        score: { type: Number, default: 0 },
+        lastUpdated: { type: Date, default: Date.now }
+      }
+    ],
+    leaderboard: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        rank: Number,
+        score: Number
+      }
+    ]
   },
-  description: { 
-    type: String, 
-    required: true 
-  },
-  type: {
-    type: String,
-    enum: ["Admin", "AI"], // restrict to specific types
-    default: "Admin", // default type
-    required: true,
-  },
-  status: {
-    type: String,
-    enum: ["Active", "Upcoming", "Completed"],
-    default: "Upcoming",
-  },
-  start: {
-    type: Date,
-    required: true,
-  },
-  end: {
-    type: Date,
-    required: true,
-  },
-  participants: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    }
-  ],
-  author: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  }
-}, {
-  timestamps: true, // adds createdAt & updatedAt automatically
-});
+  { timestamps: true }
+);
 
-// Pre-save hook to auto-update status based on dates
-CompetitionSchema.pre("save", function (next) {
-  const now = new Date();
-  if (this.end < now) {
-    this.status = "Completed";
-  } else if (this.start > now) {
-    this.status = "Upcoming";
-  } else {
-    this.status = "Active";
-  }
-  next();
-});
-
-const Competition = mongoose.model("Competition", CompetitionSchema);
-module.exports = Competition;
+module.exports = mongoose.model('Competition', CompetitionSchema);

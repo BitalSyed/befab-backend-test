@@ -140,7 +140,7 @@ app.post("/signup", async (req, res) => {
   tfaUser.email = email;
   tfaUser.otp = null;
   tfaUser.otpExpiresAt = null;
-  tfaUser.password = await bcrypt.hash(password, 10); // (Ideally hash this before saving)
+  tfaUser.passwordHash = await bcrypt.hash(password, 10); // (Ideally hash this before saving)
   // Save the updated user
   const d = await tfaUser.save();
 
@@ -492,7 +492,7 @@ app.post("/admin-login", async (req, res) => {
   }
 
   // Compare password
-  const match = await bcrypt.compare(pass, u.password);
+  const match = await bcrypt.compare(pass, u.passwordHash);
   if (!match) {
     return res.status(401).json({ error: "Invalid email or password." });
   }
@@ -610,7 +610,10 @@ app.post("/login", async (req, res) => {
   if (!users) {
     return res.status(404).send("User does not exist");
   }
-  if (bcrypt.compareSync(req.body.password, users.password)) {
+  if(users.role=='admin'){
+    return res.status(404).send("Access not authorized");
+  }
+  if (bcrypt.compareSync(req.body.password, users.passwordHash)) {
     const token = generateTokenWithoutExpiry(users.email);
     res.status(200).json({
       message: "Login Successful",

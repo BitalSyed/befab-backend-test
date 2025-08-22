@@ -4,11 +4,11 @@ const { requireAuth } = require('../middleware/auth');
 
 const Newsletter = require('../models/Newsletter');
 const Video = require('../models/Video');
-// const Group = require('../models/Group');
+const Group = require('../models/Group');
 const Competition = require('../models/Competition');
 const Goal = require('../models/Goal');
-// const DayNutrition = require('../models/Nutrition');
-// const Fitness = require('../models/Fitness');
+const DayNutrition = require('../models/Nutrition');
+const Fitness = require('../models/Fitness');
 const { Chat, Message } = require('../models/Message');
 
 // All app (user-facing) routes require auth

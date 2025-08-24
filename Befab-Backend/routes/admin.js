@@ -114,8 +114,22 @@ const storage1 = multer.diskStorage({
   },
 });
 
+const storage2 = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, "../files/groups");
+    // Ensure directory exists
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, Date.now() + "-" + file.fieldname + ext);
+  },
+});
+
 const uploadNews = multer({ storage });
 const uploadVideo = multer({ storage: storage1 });
+const uploadGroup = multer({ storage: storage2 });
 
 router.post("/get", async (req, res) => {
   const { token } = req.body;
@@ -459,19 +473,40 @@ router.get("/groups", async (_req, res) => {
   res.json(groups);
 });
 
-router.post("/groups", async (req, res) => {
-  const { name, description, imageUrl, bannerUrl, visibility } = req.body;
-  if (!name) return res.status(400).json({ error: "Missing name" });
-  const grp = await Group.create({
-    name,
-    description,
-    imageUrl,
-    bannerUrl,
-    visibility,
-    createdBy: req.user._id,
-  });
-  res.status(201).json(grp);
-});
+router.post(
+  "/groups",
+  uploadGroup.fields([
+    { name: "image", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    try {
+      const { name, description, visibility } = req.body;
+      if (!name) return res.status(400).json({ error: "Missing name" });
+
+      // extract file paths from multer
+      const imageUrl = req.files?.image ? `/groups/${req.files.image[0].filename}` : null;
+      const bannerUrl = req.files?.banner ? `/groups/${req.files.banner[0].filename}` : null;
+
+      const grp = await Group.create({
+        name,
+        description,
+        imageUrl,
+        bannerUrl,
+        visibility,
+        createdBy: req.user._id,
+      });
+
+      res.status(201).json({
+        message: "Group created successfully",
+        group: grp,
+      });
+    } catch (err) {
+      console.error("Error creating group:", err);
+      res.status(500).json({ error: "Server error while creating group" });
+    }
+  }
+);
 
 router.patch("/groups/:id", async (req, res) => {
   const grp = await Group.findByIdAndUpdate(req.params.id, req.body, {

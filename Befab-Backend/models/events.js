@@ -6,11 +6,6 @@ const CompetitionSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    status: {
-      type: String,
-      enum: ['upcoming', 'active', 'completed'],
-      default: 'upcoming',
-    },
     ip: {
       type: String,
     },
@@ -28,30 +23,26 @@ const CompetitionSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, // adds createdAt & updatedAt automatically
+    timestamps: true,
+    toJSON: { virtuals: true },   // include virtuals when sending as JSON
+    toObject: { virtuals: true }, // include virtuals when converting to object
   }
 );
 
-CompetitionSchema.virtual('computedStatus').get(function() {
+// Virtual status field (not stored in DB, always computed dynamically)
+CompetitionSchema.virtual("status").get(function () {
   const now = new Date();
-  if (this.status === 'draft' || this.status === 'paused') {
-    return this.status; // keep admin override
-  }
-  if (now < this.start) return 'upcoming';
-  if (now >= this.start && now <= this.end) return 'active';
-  if (now > this.end) return 'completed';
-  return this.status; // fallback
-});
 
-// Optional: always update `status` before saving
-CompetitionSchema.pre('save', function(next) {
-  const now = new Date();
-  if (this.status !== 'draft' && this.status !== 'paused') {
-    if (now < this.start) this.status = 'upcoming';
-    else if (now >= this.start && now <= this.end) this.status = 'active';
-    else if (now > this.end) this.status = 'completed';
-  }
-  next();
+  // event is upcoming
+  if (now < this.date) return "upcoming";
+
+  // event is today
+  if (now.toDateString() === this.date.toDateString()) return "active";
+
+  // event already passed
+  if (now > this.date) return "completed";
+
+  return "upcoming"; // fallback
 });
 
 const Event = mongoose.model("Event", CompetitionSchema);

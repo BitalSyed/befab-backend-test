@@ -10,6 +10,8 @@ const Goal = require('../models/Goal');
 const DayNutrition = require('../models/Nutrition');
 const Fitness = require('../models/Fitness');
 const { Chat, Message } = require('../models/Message');
+const Event = require('../models/events');
+const User = require('../models/User');
 
 // All app (user-facing) routes require auth
 router.use(requireAuth);
@@ -19,9 +21,36 @@ router.use(requireAuth);
  * Below are concrete feature endpoints.
  */
 
+router.get("/get", async (req, res) => {
+
+  const email = req.user.email;
+  
+  // Find user by email
+  const u = await User.findOne({ email: email });
+  if (!u) {
+    return res.status(401).json({ error: "User Not Found" });
+  }
+
+
+  // await createSystemLog(
+  //   user._id,
+  //   "Logged-in",
+  //   `${user.firstName} Logged-in as Admin`
+  // );
+
+  return res.json(u);
+});
+
 /** NEWSLETTERS (read/list, like, comment, save) */
 router.get('/newsletters', async (_req, res) => {
-  const list = await Newsletter.find({ status: 'published' }).sort({ createdAt: -1 });
+  const list = await Newsletter.find({ status: 'published' }).sort({ createdAt: -1 }).populate("author").select("-password");
+  console.log(list)
+  res.json(list);
+});
+
+router.get('/newsletters/:id', async (req, res) => {
+  console.log(req.params)
+  const list = await Newsletter.findOne({ _id: req.params.id, status: 'published' }).sort({ createdAt: -1 });
   res.json(list);
 });
 
@@ -99,9 +128,69 @@ router.post('/videos/:id/comments', async (req, res) => {
 });
 
 /** GROUPS (join, leave, request to join if private; posts/threads & comments) */
-router.get('/groups', async (_req, res) => {
-  const groups = await Group.find().select('name description imageUrl bannerUrl visibility members');
-  res.json(groups);
+router.get('/groups', async (req, res) => {
+  try {
+    const groups = await Group.find()
+      .select('name description imageUrl bannerUrl visibility members joinRequests');
+
+    const userId = req.user?._id?.toString(); // ensure string for comparison
+
+    const formatted = groups.map(group => {
+      let state = "JOIN"; // default
+
+      if (userId) {
+        if (group.members.some(m => m.toString() === userId)) {
+          state = "LEAVE";
+        } else if (group.joinRequests?.some(r => r.toString() === userId)) {
+          state = "REQUESTED";
+        }
+      }
+
+      return {
+        ...group.toObject(),
+        state
+      };
+    });
+
+    res.json(formatted);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get('/groups/:id', async (req, res) => {
+  try {
+    const group = await Group.findOne({ _id: req.params.id })
+      .select('name description imageUrl bannerUrl visibility members joinRequests posts');
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const userId = req.user?._id?.toString(); // ensure string for comparison
+
+    let state = "JOIN"; // default
+
+    if (userId) {
+      if (group.members.some(m => m.toString() === userId)) {
+        state = "LEAVE";
+      } else if (group.joinRequests?.some(r => r.toString() === userId)) {
+        state = "REQUESTED";
+      }
+    }
+
+    // create final response object
+    const formatted = {
+      ...group.toObject(),
+      state
+    };
+
+    res.json(formatted);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 router.post('/groups/:id/join', async (req, res) => {
@@ -123,11 +212,27 @@ router.post('/groups/:id/join', async (req, res) => {
 });
 
 router.post('/groups/:id/leave', async (req, res) => {
-  const g = await Group.findById(req.params.id);
-  if (!g) return res.status(404).json({ error: 'Not found' });
-  g.members = g.members.filter(m => m.toString() !== req.user._id.toString());
-  await g.save();
-  res.json({ joined: false });
+  try {
+    const g = await Group.findById(req.params.id);
+    if (!g) return res.status(404).json({ error: 'Not found' });
+
+    const userId = req.user._id.toString();
+
+    // remove from members
+    g.members = g.members.filter(m => m.toString() !== userId);
+
+    // remove from joinRequests if present
+    if (g.joinRequests && g.joinRequests.length > 0) {
+      g.joinRequests = g.joinRequests.filter(r => r.toString() !== userId);
+    }
+
+    await g.save();
+
+    res.json({ joined: false, requested: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 router.post('/groups/:id/posts', async (req, res) => {
@@ -142,10 +247,26 @@ router.post('/groups/:id/posts', async (req, res) => {
 });
 
 /** COMPETITIONS (list, join/leave, my progress, leaderboard) */
-router.get('/competitions', async (_req, res) => {
-  const now = new Date();
-  const list = await Competition.find({ end: { $gte: new Date(now.getFullYear() - 1, 0, 1) } }).sort({ start: -1 });
-  res.json(list);
+router.get('/competitions', async (req, res) => {
+  try {
+    const now = new Date();
+    const competitions = await Competition.find({
+      end: { $gte: new Date(now.getFullYear() - 1, 0, 1) }
+    }).sort({ start: -1 });
+
+    // Map each competition and check if user joined
+    const list = competitions.map(comp => {
+      const joined = comp.participants.some(
+        p => p.user.toString() === req.user._id.toString()
+      );
+      return { ...comp.toObject(), joined };
+    });
+
+    res.json({ list });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 router.post('/competitions/:id/join', async (req, res) => {
@@ -218,6 +339,12 @@ router.post('/nutrition/:date/hydration', async (req, res) => {
   res.json({ waterIntake_oz: doc.waterIntake_oz });
 });
 
+/** Events (summary/vitals/workouts; manual add) */
+router.get("/events", async (_req, res) => {
+  const comps = await Event.find().sort({ createdAt: -1 }).populate("author").select("-passwordHash");
+  res.json(comps);
+});
+
 /** FITNESS (summary/vitals/workouts; manual add) */
 router.get('/fitness/:date', async (req, res) => {
   const date = new Date(req.params.date);
@@ -264,19 +391,93 @@ router.post('/chats/:id/messages', async (req, res) => {
 });
 
 /** SURVEYS (list & respond; tabs: required/optional/past are client filters) */
-router.get('/surveys', async (_req, res) => {
-  const list = await require('../models/Survey').find().sort({ createdAt: -1 });
-  res.json(list);
+router.get('/surveys', async (req, res) => {
+  try {
+    const Survey = require('../models/Survey');
+    const userId = req.user._id;
+
+    const list = await Survey.find({
+      // ✅ exclude surveys where responses.user contains this user
+      "responses.user": { $ne: userId }
+    })
+      .select("-responses")
+      .sort({ createdAt: -1 });
+
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+router.get('/surveys', async (req, res) => {
+  try {
+    const Survey = require('../models/Survey');
+    const userId = req.user._id;
+
+    const list = await Survey.find({
+      // ✅ exclude surveys where responses.user contains this user
+      "responses.user": { $ne: userId }
+    })
+      .select("-responses")
+      .sort({ createdAt: -1 });
+
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get('/surveys/:id', async (req, res) => {
+  try {
+    const Survey = require('../models/Survey');
+    const userId = req.user._id;
+
+    const survey = await Survey.findOne({
+      _id: req.params.id,
+      // ✅ exclude if user already responded
+      responses: { $not: { $elemMatch: { user: userId } } }
+    })
+      .select("-responses")
+      .sort({ createdAt: -1 });
+
+    if (!survey) {
+      return res.status(404).json({ error: "Survey not found or already submitted" });
+    }
+
+    res.json(survey);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 router.post('/surveys/:id/response', async (req, res) => {
-  const Survey = require('../models/Survey');
-  const { answers } = req.body;
-  const s = await Survey.findById(req.params.id);
-  if (!s) return res.status(404).json({ error: 'Not found' });
-  s.responses.push({ user: req.user._id, answers });
-  await s.save();
-  res.status(201).json({ ok: true });
+  try {
+    const Survey = require('../models/Survey');
+    const { answers } = req.body;
+
+    const s = await Survey.findById(req.params.id);
+    if (!s) return res.status(404).json({ error: 'Not found' });
+
+    // ✅ check if user already responded
+    const alreadyResponded = s.responses.some(
+      r => r.user.toString() === req.user._id.toString()
+    );
+
+    if (alreadyResponded) {
+      return res.status(200).json({ error: "You have already submitted this survey." });
+    }
+
+    // ✅ add new response
+    s.responses.push({ user: req.user._id, answers });
+    await s.save();
+
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 module.exports = router;

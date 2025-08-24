@@ -136,7 +136,7 @@ app.post("/signup", async (req, res) => {
 
   tfaUser.firstName = firstName;
   tfaUser.lastName = lastName;
-  tfaUser.userName = username.toLowerCase();
+  tfaUser.username = username.toLowerCase();
   tfaUser.email = email;
   tfaUser.otp = null;
   tfaUser.otpExpiresAt = null;

@@ -41,6 +41,34 @@ router.get("/get", async (req, res) => {
   return res.json(u);
 });
 
+router.get("/users", async (req, res) => {
+  try {
+    const query = req.query.query?.trim() || "";
+
+    if (!query) {
+      return res.json([]); // empty search returns empty list
+    }
+
+    // Search by firstName, lastName, username, or email but exclude logged-in user
+    const users = await User.find({
+      _id: { $ne: req.user._id }, // exclude current user
+      $or: [
+        { firstName: { $regex: query, $options: "i" } },
+        { lastName: { $regex: query, $options: "i" } },
+        { username: { $regex: query, $options: "i" } },
+        { email: { $regex: query, $options: "i" } },
+      ],
+    })
+      .select("_id firstName lastName username email") // return only safe fields
+      .limit(20);
+
+    return res.json(users);
+  } catch (err) {
+    console.error("Error searching users:", err);
+    return res.status(500).json({ error: "Server Error" });
+  }
+});
+
 /** NEWSLETTERS (read/list, like, comment, save) */
 router.get('/newsletters', async (_req, res) => {
   const list = await Newsletter.find({ status: 'published' }).sort({ createdAt: -1 }).populate("author").select("-password");
@@ -92,8 +120,8 @@ router.get('/videos', async (req, res) => {
 });
 
 router.post('/videos', async (req, res) => {
-  const { title, caption, category, url, thumbnailUrl, durationSec } = req.body;
-  if (!title || !category || !url) return res.status(400).json({ error: 'Missing fields' });
+  const { title, caption, category, url, thumbnailUrl, durationSec, type } = req.body;
+  if (!title || !type || !url) return res.status(400).json({ error: 'Missing fields' });
 
   // Users can upload only to Students; admins may upload to any (client should enforce; server enforces here)
   const isStudents = category === 'Students';
@@ -371,11 +399,24 @@ router.get('/chats', async (req, res) => {
 
 router.post('/chats', async (req, res) => {
   const { participantIds } = req.body;
+
   if (!Array.isArray(participantIds) || participantIds.length === 0) {
     return res.status(400).json({ error: 'participantIds required' });
   }
-  const chat = await Chat.create({ participants: [req.user._id, ...participantIds] });
-  res.status(201).json(chat);
+
+  // Include the logged-in user automatically
+  const allParticipants = [req.user._id.toString(), ...participantIds.map(id => id.toString())];
+
+  // Check if chat already exists with exactly these participants
+  let chat = await Chat.findOne({
+    participants: { $all: allParticipants, $size: allParticipants.length }
+  });
+
+  if (!chat) {
+    chat = await Chat.create({ participants: allParticipants });
+  }
+
+  res.status(200).json(chat);
 });
 
 router.get('/chats/:id/messages', async (req, res) => {

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const categories = ['BeFAB HBCU', 'Mentor Meetup', 'Students']; // posting rules vary by role :contentReference[oaicite:5]{index=5}
+const types = ['post', 'story', 'reel', 'live']; // posting rules vary by role :contentReference[oaicite:5]{index=5}
 const statuses = ['pending', 'approved', 'rejected', 'published'];
 
 const VideoSchema = new mongoose.Schema(
@@ -8,7 +9,8 @@ const VideoSchema = new mongoose.Schema(
     uploader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     title: { type: String, trim: true, required: true },
     caption: { type: String, trim: true },
-    category: { type: String, enum: categories, required: true },
+    category: { type: String, enum: categories, required: true, default: 'BeFAB HBCU' },
+    type: { type: String, enum: types, default: 'post' },
     url: { type: String, required: true }, // storage URL
     thumbnailUrl: { type: String },
     durationSec: { type: Number, min: 0 },

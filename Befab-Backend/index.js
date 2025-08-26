@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
 const http = require("http");
+const fs = require("fs");
 const { Server } = require("socket.io");
 
 const appRoutes = require("./routes/app");
@@ -66,6 +67,31 @@ app.post("/ping", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
+});
+
+const filePath = path.join(__dirname, "data.json");
+
+// POST /data endpoint
+app.post("/data", (req, res) => {
+  const incomingData = req.body;
+
+  if (!incomingData) {
+    return res.status(400).json({ message: "No data provided" });
+  }
+
+  // Convert JSON to string
+  const dataToWrite = JSON.stringify(incomingData) + "\n";
+
+  // Append to txt file
+  fs.appendFile(filePath, dataToWrite, (err) => {
+    if (err) {
+      console.error("❌ Error writing file:", err);
+      return res.status(500).json({ message: "Error saving data" });
+    }
+
+    console.log("✅ Data saved:", incomingData);
+    res.status(200).json({ message: "Data saved successfully" });
+  });
 });
 
 

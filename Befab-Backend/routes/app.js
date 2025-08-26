@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
 
 const Newsletter = require('../models/Newsletter');
 const Video = require('../models/Video');
@@ -119,22 +121,67 @@ router.get('/videos', async (req, res) => {
   res.json(vids);
 });
 
-router.post('/videos', async (req, res) => {
-  const { title, caption, category, url, thumbnailUrl, durationSec, type } = req.body;
-  if (!title || !type || !url) return res.status(400).json({ error: 'Missing fields' });
-
-  // Users can upload only to Students; admins may upload to any (client should enforce; server enforces here)
-  const isStudents = category === 'Students';
-  if (!isStudents && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Only admins can post to this category' });
-  }
-
-  const v = await Video.create({
-    uploader: req.user._id, title, caption, category, url, thumbnailUrl, durationSec,
-    status: req.user.role === 'admin' ? 'published' : 'pending'
-  });
-  res.status(201).json(v);
+// configure multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "../files/videos"); // make sure this folder exists
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
 });
+
+const upload = multer({ storage });
+
+router.post(
+  "/videos",
+  upload.fields([
+    { name: "url", maxCount: 1 }, // video file
+    { name: "thumbnailUrl", maxCount: 1 }, // thumbnail file
+  ]),
+  async (req, res) => {
+    try {
+      const { title, caption, category, durationSec, type } = req.body;
+
+      if (!title || !type || !req.files?.url) {
+        return res.status(400).json({ error: "Missing fields" });
+      }
+
+      // Enforce category rules
+      const isStudents = category === "Students";
+      if (!isStudents && req.user.role !== "admin") {
+        return res
+          .status(403)
+          .json({ error: "Only admins can post to this category" });
+      }
+
+      const videoFile = req.files.url[0];
+      
+      const videoPath = `/videos/${videoFile.filename}`;
+      const thumbnailPath = req.files.thumbnailUrl
+        ? req.files.thumbnailUrl[0].path
+        : null;
+
+      const v = await Video.create({
+        uploader: req.user._id,
+        title,
+        caption,
+        category,
+        url: videoPath,
+        thumbnailUrl: thumbnailPath,
+        durationSec,
+        type,
+        status: req.user.role === "admin" ? "published" : "pending",
+      });
+
+      res.status(201).json(v);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
 
 router.post('/videos/:id/like', async (req, res) => {
   const v = await Video.findById(req.params.id);
@@ -319,11 +366,51 @@ router.get('/goals', async (req, res) => {
   res.json(list);
 });
 
+router.get('/goals/current', async (req, res) => {
+  const list = await Goal.findOne({ user: req.user._id, status: 'active' }).sort({ createdAt: -1 });
+  res.json(list);
+});
+
 router.post('/goals', async (req, res) => {
-  const { name, durationDays, milestones, trackProgress } = req.body;
-  if (!name || !durationDays) return res.status(400).json({ error: 'Missing required fields' });
-  const goal = await Goal.create({ user: req.user._id, name, durationDays, milestones, trackProgress });
-  res.status(201).json(goal);
+  try {
+    const { name, durationDays, milestones, trackProgress } = req.body;
+    if (!name || !durationDays) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Get last goal for this user (latest createdAt)
+    const lastGoal = await Goal.findOne({ user: req.user._id })
+      .sort({ createdAt: -1 });
+
+    let status = "active";
+    let startDate = new Date();
+
+    if (lastGoal) {
+      const lastEnd = new Date(lastGoal.createdAt);
+      lastEnd.setDate(lastEnd.getDate() + lastGoal.durationDays);
+
+      if (new Date() < lastEnd) {
+        // Last goal still running → make this one upcoming
+        status = "upcoming";
+        startDate = lastEnd; // start right after the last ends
+      }
+    }
+
+    const goal = await Goal.create({
+      user: req.user._id,
+      name,
+      durationDays,
+      milestones,
+      trackProgress,
+      status,
+      startDate
+    });
+
+    res.status(201).json(goal);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 router.patch('/goals/:id/progress', async (req, res) => {

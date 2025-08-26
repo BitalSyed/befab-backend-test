@@ -1,23 +1,42 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const GoalSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    name: { type: String, required: true, trim: true }, // health/fitness related :contentReference[oaicite:11]{index=11}
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    name: { type: String, required: true, trim: true },
     durationDays: { type: Number, required: true, min: 1 },
-    milestones: [
-      {
-        label: { type: String, required: true },
-        targetValue: { type: Number, required: true }, // US metrics note (tracked in apps) :contentReference[oaicite:12]{index=12}
-        unit: { type: String, trim: true }
-      }
-    ],
     trackProgress: { type: Boolean, default: true },
-    progressValue: { type: Number, default: 0 }, // value-based progress
-    progressPercent: { type: Number, default: 0 }, // 0..100
-    status: { type: String, enum: ['active', 'completed', 'expired'], default: 'active' }
+    milestones: { type: Number, required: true },
+    progressValue: { type: Number, default: 0 },
+    progressPercent: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ["active", "completed", "expired", 'upcoming'],
+      default: "active",
+    },
+    startDate: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Goal', GoalSchema);
+// 🔹 Virtual: check if expired based on createdAt + durationDays
+GoalSchema.virtual("isExpired").get(function () {
+  if (!this.createdAt || !this.durationDays) return false;
+  const endDate = new Date(this.createdAt);
+  endDate.setDate(endDate.getDate() + this.durationDays);
+  return new Date() > endDate;
+});
+
+// 🔹 Pre hook: whenever doc is loaded, update status automatically
+GoalSchema.pre("save", function (next) {
+  if (this.createdAt && this.durationDays) {
+    const endDate = new Date(this.createdAt);
+    endDate.setDate(endDate.getDate() + this.durationDays);
+    if (new Date() > endDate) {
+      this.status = "completed";
+    }
+  }
+  next();
+});
+
+module.exports = mongoose.model("Goal", GoalSchema);

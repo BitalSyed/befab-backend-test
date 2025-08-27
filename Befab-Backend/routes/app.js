@@ -117,14 +117,22 @@ router.get('/videos', async (req, res) => {
   const { category } = req.query;
   const filter = { status: 'published' };
   if (category) filter.category = category;
-  const vids = await Video.find(filter).sort({ createdAt: -1 });
+  const vids = await Video.find(filter).sort({ createdAt: -1 }).populate('uploader');
+  res.json(vids);
+});
+
+router.get('/videos/:id', async (req, res) => {
+  const { category } = req.query;
+  const filter = { status: 'published', _id: req.params.id };
+  if (category) filter.category = category;
+  const vids = await Video.findOne(filter).sort({ createdAt: -1 }).populate('uploader');
   res.json(vids);
 });
 
 // configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "../files/videos"); // make sure this folder exists
+    cb(null, path.join(__dirname, "../files/videos")); // make sure this folder exists
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -144,13 +152,14 @@ router.post(
     try {
       const { title, caption, category, durationSec, type } = req.body;
 
-      if (!title || !type || !req.files?.url) {
+      if (!title || !caption || !req.files?.url) {
         return res.status(400).json({ error: "Missing fields" });
       }
 
       // Enforce category rules
       const isStudents = category === "Students";
-      if (!isStudents && req.user.role !== "admin") {
+      if (isStudents && req.user.role !== "admin") {
+        // console.log(isStudents, category)
         return res
           .status(403)
           .json({ error: "Only admins can post to this category" });
@@ -172,7 +181,7 @@ router.post(
         thumbnailUrl: thumbnailPath,
         durationSec,
         type,
-        status: req.user.role === "admin" ? "published" : "pending",
+        status: "published",
       });
 
       res.status(201).json(v);
@@ -184,12 +193,31 @@ router.post(
 );
 
 router.post('/videos/:id/like', async (req, res) => {
-  const v = await Video.findById(req.params.id);
-  if (!v) return res.status(404).json({ error: 'Not found' });
-  const idx = v.likes.findIndex(u => u.toString() === req.user._id.toString());
-  if (idx >= 0) v.likes.splice(idx, 1); else v.likes.push(req.user._id);
-  await v.save();
-  res.json({ likes: v.likes.length });
+  try {
+    const v = await Video.findById(req.params.id);
+    if (!v) return res.status(404).json({ error: 'Not found' });
+
+    const userId = req.user._id;
+    let update;
+
+    if (v.likes.includes(userId)) {
+      // If already liked → remove
+      update = { $pull: { likes: userId } };
+    } else {
+      // If not liked → add
+      update = { $addToSet: { likes: userId } };
+    }
+
+    const updated = await Video.findByIdAndUpdate(
+      req.params.id,
+      update,
+      { new: true, select: "likes" } // return only likes array
+    );
+
+    res.json({ likes: updated.likes.length });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 router.post('/videos/:id/comments', async (req, res) => {
@@ -480,7 +508,7 @@ router.post('/fitness/:date/workouts', async (req, res) => {
 
 /** MESSAGES (chats with text/image/video) */
 router.get('/chats', async (req, res) => {
-  const chats = await Chat.find({ participants: req.user._id }).sort({ updatedAt: -1 });
+  const chats = await Chat.find({ participants: req.user._id }).sort({ updatedAt: -1 }).populate('participants');
   res.json(chats);
 });
 
